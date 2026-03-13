@@ -22,4 +22,4 @@ screen -S grupos-ia
 node bot.js
 # Ctrl+A+D para detach
 
-👑 Comandos Admin
+
