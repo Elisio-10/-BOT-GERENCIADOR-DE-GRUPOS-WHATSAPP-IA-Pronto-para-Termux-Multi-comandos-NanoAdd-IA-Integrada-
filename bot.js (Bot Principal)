@@ -1,26 +1,44 @@
-cat > bot.js << 'EOF'
+
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
+const express = require('express');
 const config = require('./config');
 const db = require('./db');
 
+const app = express();
 const client = new Client({
-  authStrategy: new LocalAuth(),
-  puppeteer: { headless: true }
+  authStrategy: new LocalAuth({ clientId: "grupos-ia" }),
+  puppeteer: { 
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  }
 });
 
-const spamTrack = new Map();
-const gruposConfig = new Map();
-
+// QR Terminal + Web log
 client.on('qr', (qr) => {
-  console.log('📱 ESCANEIE O QR CODE:');
+  console.log('🔗 *QR CODE DISPONÍVEL* (copie este link no Railway logs):');
+  console.log('📱 https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(qr));
   qrcode.generate(qr, { small: true });
+  console.log('\n✅ ESCANEIE no celular WhatsApp > Dispositivos vinculados');
+});
+
+client.on('authenticated', () => {
+  console.log('✅ AUTENTICADO com sucesso!');
 });
 
 client.on('ready', () => {
-  console.log('✅ Bot conectado e pronto!');
+  console.log('🎉 Bot GRUPO IA ONLINE 24/7!');
   console.log('👑 Admin:', config.ADMIN_NUM);
 });
+
+client.on('disconnected', (reason) => {
+  console.log('❌ Desconectado:', reason);
+  setTimeout(() => client.initialize(), 5000);
+});
+
+// [RESTO DO CÓDIGO IGUAL - handlers message, anti-spam, comandos...]
+const spamTrack = new Map();
+const gruposConfig = new Map();
 
 client.on('message', async (msg) => {
   if (msg.fromMe) return;
@@ -48,7 +66,7 @@ client.on('message', async (msg) => {
     }
   }
 
-  // IA Auto-respostas
+  // IA Auto-respostas (igual)
   for (const [key, resposta] of Object.entries(config.IA_RESPOSTAS)) {
     if (body.includes(key)) {
       await msg.reply(resposta);
@@ -56,7 +74,7 @@ client.on('message', async (msg) => {
     }
   }
 
-  // Comandos Admin (!config, !ban, !clear, etc.)
+  // ADMIN COMANDOS (igual)
   if (sender === `258${config.ADMIN_NUM}@c.us` || sender === `${config.ADMIN_NUM}@c.us`) {
     if (cmd === 'config') {
       const novaConfig = {
@@ -82,8 +100,8 @@ client.on('message', async (msg) => {
 
     if (cmd === 'clear') {
       const qtd = Math.min(parseInt(args[1]) || 50, 200);
-      const chats = await chatId.getChat();
-      const messages = await chats.fetchMessages({ limit: qtd });
+      const chat = await client.getChatById(chatId);
+      const messages = await chat.fetchMessages({ limit: qtd });
       messages.forEach(m => m.delete(true));
       msg.reply(`🧹 *CLEAR:* ${qtd} mensagens apagadas`);
     }
@@ -96,7 +114,7 @@ client.on('message', async (msg) => {
     }
   }
 
-  // NanoAdd Custom Commands
+  // NanoAdd
   if (cmd === 'nanoadd' && sender === `258${config.ADMIN_NUM}@c.us`) {
     const nomeCmd = args[1];
     const resposta = args.slice(2).join(' ');
@@ -107,13 +125,20 @@ client.on('message', async (msg) => {
     }
   }
 
-  // Executar comandos custom
+  // Executar custom cmds
   db.getNanoCmd(chatId, cmd, async (err, cmdCustom) => {
-    if (cmdCustom) {
-      await msg.reply(cmdCustom.resposta);
-    }
+    if (cmdCustom) await msg.reply(cmdCustom.resposta);
   });
 });
 
 client.initialize();
+
+// Express health check para Railway
+app.get('/', (req, res) => {
+  res.send('🤖 Bot Grupos IA ONLINE | Logs: railway.app');
+});
+
+app.listen(3000, () => {
+  console.log('🌐 Health check na porta 3000');
+});
 EOF
