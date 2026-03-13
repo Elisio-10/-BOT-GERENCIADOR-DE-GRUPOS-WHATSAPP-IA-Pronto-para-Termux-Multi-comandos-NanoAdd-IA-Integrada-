@@ -1,81 +1,41 @@
-cat > db.js << 'EOF'
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
 
-const dbPath = path.join(__dirname, 'grupos.db');
-const db = new sqlite3.Database(dbPath);
+const sqlite3 = require('sqlite3').verbose();
+const db = new sqlite3.Database('grupos_ia.db');
 
 db.serialize(() => {
-  // Configurações por grupo
-  db.run(`CREATE TABLE IF NOT EXISTS configs (
-    groupId TEXT PRIMARY KEY,
-    antispam INTEGER DEFAULT 1,
-    antilink INTEGER DEFAULT 1,
-    bemvindo INTEGER DEFAULT 1,
-    maxmsg INTEGER DEFAULT 5
-  )`);
-
-  // Bans por grupo
-  db.run(`CREATE TABLE IF NOT EXISTS bans (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    groupId TEXT,
-    userId TEXT,
-    motivo TEXT,
-    dataBan TEXT,
-    admin TEXT
-  )`);
-
-  // Comandos custom NanoAdd
-  db.run(`CREATE TABLE IF NOT EXISTS nano_cmds (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    groupId TEXT,
-    comando TEXT UNIQUE,
-    resposta TEXT
-  )`);
-
-  // Logs de ações
-  db.run(`CREATE TABLE IF NOT EXISTS logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    groupId TEXT,
-    acao TEXT,
-    usuario TEXT,
-    data TEXT
-  )`);
+    // Configurações por grupo
+    db.run(`CREATE TABLE IF NOT EXISTS configs (
+        chatId TEXT PRIMARY KEY,
+        antispam INTEGER DEFAULT 1,
+        bemvindo INTEGER DEFAULT 1,
+        antilink INTEGER DEFAULT 0,
+        nivel TEXT DEFAULT 'basico'
+    )`);
+    
+    // Bans permanentes
+    db.run(`CREATE TABLE IF NOT EXISTS bans (
+        numero TEXT,
+        chatId TEXT,
+        motivo TEXT,
+        data TEXT DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY(numero, chatId)
+    )`);
+    
+    // Comandos custom NANOADD
+    db.run(`CREATE TABLE IF NOT EXISTS nano_cmds (
+        chatId TEXT,
+        comando TEXT,
+        resposta TEXT,
+        PRIMARY KEY(chatId, comando)
+    )`);
+    
+    // Logs mensagens deletadas
+    db.run(`CREATE TABLE IF NOT EXISTS logs (
+        chatId TEXT,
+        author TEXT,
+        acao TEXT,
+        data TEXT DEFAULT CURRENT_TIMESTAMP
+    )`);
 });
 
-function getConfig(groupId, callback) {
-  db.get('SELECT * FROM configs WHERE groupId = ?', [groupId], callback);
-}
-
-function setConfig(groupId, config, callback) {
-  db.run('INSERT OR REPLACE INTO configs (groupId, antispam, antilink, bemvindo, maxmsg) VALUES (?, ?, ?, ?, ?)',
-    [groupId, config.antispam || 1, config.antilink || 1, config.bemvindo || 1, config.maxmsg || 5], callback);
-}
-
-function addBan(groupId, userId, motivo, admin, callback) {
-  const dataBan = new Date().toISOString();
-  db.run('INSERT INTO bans (groupId, userId, motivo, dataBan, admin) VALUES (?, ?, ?, ?, ?)',
-    [groupId, userId, motivo, dataBan, admin], callback);
-}
-
-function getBans(groupId, callback) {
-  db.all('SELECT * FROM bans WHERE groupId = ? ORDER BY dataBan DESC', [groupId], callback);
-}
-
-function nanoAddCmd(groupId, comando, resposta, callback) {
-  db.run('INSERT OR REPLACE INTO nano_cmds (groupId, comando, resposta) VALUES (?, ?, ?)',
-    [groupId, comando, resposta], callback);
-}
-
-function getNanoCmd(groupId, comando, callback) {
-  db.get('SELECT * FROM nano_cmds WHERE groupId = ? AND comando = ?', [groupId, comando], callback);
-}
-
-function logAcao(groupId, acao, usuario, callback) {
-  const data = new Date().toISOString();
-  db.run('INSERT INTO logs (groupId, acao, usuario, data) VALUES (?, ?, ?, ?)',
-    [groupId, acao, usuario, data], callback);
-}
-
-module.exports = { db, getConfig, setConfig, addBan, getBans, nanoAddCmd, getNanoCmd, logAcao };
-EOF
+module.exports = db;
