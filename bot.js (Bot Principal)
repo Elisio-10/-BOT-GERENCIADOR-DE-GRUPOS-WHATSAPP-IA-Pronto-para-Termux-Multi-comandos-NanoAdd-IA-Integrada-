@@ -1,144 +1,56 @@
 
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
-const express = require('express');
-const config = require('./config');
+const chalk = require('chalk');
 const db = require('./db');
+const config = require('./config');
+const { adminCmds, groupProtections, iaChat } = require('./handlers');
 
-const app = express();
 const client = new Client({
-  authStrategy: new LocalAuth({ clientId: "grupos-ia" }),
-  puppeteer: { 
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  }
+    authStrategy: new LocalAuth({ clientId: 'grupos-ia-v3' }),
+    puppeteer: { 
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    }
 });
 
-// QR Terminal + Web log
 client.on('qr', (qr) => {
-  console.log('🔗 *QR CODE DISPONÍVEL* (copie este link no Railway logs):');
-  console.log('📱 https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(qr));
-  qrcode.generate(qr, { small: true });
-  console.log('\n✅ ESCANEIE no celular WhatsApp > Dispositivos vinculados');
-});
-
-client.on('authenticated', () => {
-  console.log('✅ AUTENTICADO com sucesso!');
+    console.log(chalk.bgGreen('📱 ESCANEIE QR CODE:'));
+    qrcode.generate(qr, { small: true });
 });
 
 client.on('ready', () => {
-  console.log('🎉 Bot GRUPO IA ONLINE 24/7!');
-  console.log('👑 Admin:', config.ADMIN_NUM);
+    console.log(chalk.greenBright('✅ [IA-GRUPO] Bot Conectado!'));
+    console.log(chalk.yellow(`👑 Admin: ${config.ADMIN_NUM}`));
+    console.log(chalk.cyan('📋 Comandos: !config !ban !addcmd !clear'));
 });
-
-client.on('disconnected', (reason) => {
-  console.log('❌ Desconectado:', reason);
-  setTimeout(() => client.initialize(), 5000);
-});
-
-// [RESTO DO CÓDIGO IGUAL - handlers message, anti-spam, comandos...]
-const spamTrack = new Map();
-const gruposConfig = new Map();
 
 client.on('message', async (msg) => {
-  if (msg.fromMe) return;
-  
-  const chatId = msg.from.endsWith('@g.us') ? msg.from : null;
-  if (!chatId) return;
-
-  const sender = msg.from;
-  const body = msg.body.toLowerCase().trim();
-  const args = msg.body.slice(config.PREFIXO.length).trim().split(' ');
-  const cmd = args[0].toLowerCase();
-
-  // Anti-Spam
-  if (gruposConfig.get(chatId)?.antispam) {
-    const agora = Date.now();
-    const userSpam = spamTrack.get(sender) || [];
-    const minutoAtras = agora - 60000;
+    const chat = await msg.getChat();
+    const texto = msg.body.trim();
+    const authorId = msg.author?.id._serialized || msg.from;
     
-    userSpam.push(agora);
-    spamTrack.set(sender, userSpam.filter(t => t > minutoAtras));
+    // ========== ADMIN COMMANDS ==========
+    if (authorId === config.ADMIN_NUM || msg.from === config.ADMIN_NUM) {
+        await adminCmds(msg, client, db);
+        return;
+    }
     
-    if (userSpam.length > config.ANTI_SPAM_LIMITE) {
-      await msg.reply('🚫 *ANTISPAM:* Muitas mensagens! Aguarde 1 minuto.');
-      return;
+    // ========== GROUP HANDLER ==========
+    if (chat.isGroup) {
+        await groupProtections(msg, client, db, chat.id._serialized);
+        
+        // ========== IA CONVERSACIONAL ==========
+        if (config.IA_ATIVA) {
+            const iaResp = await iaChat(texto.toLowerCase());
+            if (iaResp) msg.reply(iaResp);
+        }
     }
-  }
-
-  // IA Auto-respostas (igual)
-  for (const [key, resposta] of Object.entries(config.IA_RESPOSTAS)) {
-    if (body.includes(key)) {
-      await msg.reply(resposta);
-      return;
-    }
-  }
-
-  // ADMIN COMANDOS (igual)
-  if (sender === `258${config.ADMIN_NUM}@c.us` || sender === `${config.ADMIN_NUM}@c.us`) {
-    if (cmd === 'config') {
-      const novaConfig = {
-        antispam: args[1] === 'on' ? 1 : 0,
-        antilink: args[2] === 'on' ? 1 : 0,
-        bemvindo: args[3] === 'on' ? 1 : 0,
-        maxmsg: parseInt(args[4]) || 5
-      };
-      db.setConfig(chatId, novaConfig, () => {
-        gruposConfig.set(chatId, novaConfig);
-        msg.reply(`✅ *Config atualizada:*\nAntiSpam: ${novaConfig.antispam ? 'ON' : 'OFF'}\nAntiLink: ${novaConfig.antilink ? 'ON' : 'OFF'}\nBem-vindo: ${novaConfig.bemvindo ? 'ON' : 'OFF'}\nMax/Min: ${novaConfig.maxmsg}`);
-      });
-    }
-
-    if (cmd === 'ban') {
-      const user = msg.mentionedIds[0] || args.slice(1).join(' ');
-      const motivo = args.slice(2).join(' ') || 'Sem motivo';
-      db.addBan(chatId, user, motivo, config.ADMIN_NUM, () => {
-        client.getChatById(chatId).then(chat => chat.removeParticipants([user]));
-        msg.reply(`👊 *BANIDO:* ${user}\nMotivo: ${motivo}`);
-      });
-    }
-
-    if (cmd === 'clear') {
-      const qtd = Math.min(parseInt(args[1]) || 50, 200);
-      const chat = await client.getChatById(chatId);
-      const messages = await chat.fetchMessages({ limit: qtd });
-      messages.forEach(m => m.delete(true));
-      msg.reply(`🧹 *CLEAR:* ${qtd} mensagens apagadas`);
-    }
-
-    if (cmd === 'list') {
-      db.getBans(chatId, (err, bans) => {
-        const lista = bans.map(b => `• ${b.userId}: ${b.motivo}`).join('\n') || 'Nenhum banido';
-        msg.reply(`📋 *BANS ATIVOS:*\n${lista}`);
-      });
-    }
-  }
-
-  // NanoAdd
-  if (cmd === 'nanoadd' && sender === `258${config.ADMIN_NUM}@c.us`) {
-    const nomeCmd = args[1];
-    const resposta = args.slice(2).join(' ');
-    if (nomeCmd && resposta) {
-      db.nanoAddCmd(chatId, nomeCmd, resposta, () => {
-        msg.reply(`✨ *NANOADD:* Comando !${nomeCmd} criado!`);
-      });
-    }
-  }
-
-  // Executar custom cmds
-  db.getNanoCmd(chatId, cmd, async (err, cmdCustom) => {
-    if (cmdCustom) await msg.reply(cmdCustom.resposta);
-  });
 });
 
 client.initialize();
 
-// Express health check para Railway
-app.get('/', (req, res) => {
-  res.send('🤖 Bot Grupos IA ONLINE | Logs: railway.app');
-});
-
-app.listen(3000, () => {
-  console.log('🌐 Health check na porta 3000');
+process.on('unhandledRejection', (err) => {
+    console.log(chalk.red('❌ Erro:', err.message));
 });
 EOF
