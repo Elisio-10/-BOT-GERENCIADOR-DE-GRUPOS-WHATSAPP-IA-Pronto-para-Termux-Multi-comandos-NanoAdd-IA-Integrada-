@@ -2,7 +2,7 @@ cat > package.json << 'EOF'
 {
   "name": "whatsapp-grupos-ia-bot",
   "version": "2.0.0",
-  "description": "Bot WhatsApp Gerenciamento Grupos + IA + NanoAdd - Mozambique",
+  "description": "Bot WhatsApp Grupos IA - Hosted 24/7",
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js"
@@ -11,10 +11,7 @@ cat > package.json << 'EOF'
     "whatsapp-web.js": "^1.23.0",
     "qrcode-terminal": "^0.12.0",
     "sqlite3": "^5.1.6",
-    "fluent-emoji": "^1.1.0"
-  },
-  "keywords": ["whatsapp", "bot", "grupos", "ia", "mozambique"],
-  "author": "Elisio Francisco",
-  "license": "MIT"
+    "express": "^4.18.2"
+  }
 }
 EOF
