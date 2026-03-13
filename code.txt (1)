@@ -1,6 +1,0 @@
-https://github.com/Elisio-10/whatsapp-grupos-ia-bot
-├── bot.js      (principal)
-├── config.js   (seu admin)
-├── comandos.js (50+ funcs)
-├── ia.js       (inteligência)
-└── grupos.db   (bans/config)
