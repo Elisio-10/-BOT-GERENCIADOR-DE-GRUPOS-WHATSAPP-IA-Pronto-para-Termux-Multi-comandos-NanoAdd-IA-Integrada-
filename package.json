@@ -1,22 +1,16 @@
-
+cat > package.json << 'EOF'
 {
-  "name": "whatsapp-grupos-ia-v3",
-  "version": "3.0.0",
-  "description": "Gerenciador Grupos WhatsApp + IA + NanoAdd - Termux Ready",
+  "name": "whatsapp-grupos-ia-bot",
+  "version": "2.0.0",
   "main": "bot.js",
   "scripts": {
-    "start": "node bot.js",
-    "dev": "node --inspect bot.js"
+    "start": "node bot.js"
   },
   "dependencies": {
     "whatsapp-web.js": "^1.23.0",
     "qrcode-terminal": "^0.12.0",
     "sqlite3": "^5.1.6",
-    "axios": "^1.6.0",
-    "chalk": "^4.1.2",
-    "node-cron": "^3.0.3"
-  },
-  "author": "Elisio-10",
-  "license": "MIT"
+    "express": "^4.18.2"
+  }
 }
-
+EOF
