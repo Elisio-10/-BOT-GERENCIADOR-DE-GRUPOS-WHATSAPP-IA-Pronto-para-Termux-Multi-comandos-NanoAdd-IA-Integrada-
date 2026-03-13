@@ -1,41 +1,22 @@
-
+cat > database.js << 'EOF'
 const sqlite3 = require('sqlite3').verbose();
-const db = new sqlite3.Database('grupos_ia.db');
+const db = new sqlite3.Database('grupos.db');
 
-db.serialize(() => {
-    // Configurações por grupo
-    db.run(`CREATE TABLE IF NOT EXISTS configs (
-        chatId TEXT PRIMARY KEY,
-        antispam INTEGER DEFAULT 1,
-        bemvindo INTEGER DEFAULT 1,
-        antilink INTEGER DEFAULT 0,
-        nivel TEXT DEFAULT 'basico'
-    )`);
-    
-    // Bans permanentes
-    db.run(`CREATE TABLE IF NOT EXISTS bans (
-        numero TEXT,
-        chatId TEXT,
-        motivo TEXT,
-        data TEXT DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY(numero, chatId)
-    )`);
-    
-    // Comandos custom NANOADD
-    db.run(`CREATE TABLE IF NOT EXISTS nano_cmds (
-        chatId TEXT,
-        comando TEXT,
-        resposta TEXT,
-        PRIMARY KEY(chatId, comando)
-    )`);
-    
-    // Logs mensagens deletadas
-    db.run(`CREATE TABLE IF NOT EXISTS logs (
-        chatId TEXT,
-        author TEXT,
-        acao TEXT,
-        data TEXT DEFAULT CURRENT_TIMESTAMP
-    )`);
-});
+db.run(`CREATE TABLE IF NOT EXISTS bans (
+  id INTEGER PRIMARY KEY,
+  groupId TEXT,
+  userId TEXT,
+  reason TEXT,
+  bannedBy TEXT,
+  date TEXT
+)`);
+
+db.run(`CREATE TABLE IF NOT EXISTS custom_cmds (
+  id INTEGER PRIMARY KEY,
+  groupId TEXT,
+  trigger TEXT,
+  response TEXT
+)`);
 
 module.exports = db;
+EOF
