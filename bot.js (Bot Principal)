@@ -1,56 +1,119 @@
 cat > bot.js << 'EOF'
-const { Client, LocalAuth } = require('whatsapp-web.js');
+const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
-const chalk = require('chalk');
-const db = require('./db');
 const config = require('./config');
-const { adminCmds, groupProtections, iaChat } = require('./handlers');
+const db = require('./database');
+
+console.log('🚀 Iniciando Bot Grupos IA Pro...');
 
 const client = new Client({
-    authStrategy: new LocalAuth({ clientId: 'grupos-ia-v3' }),
-    puppeteer: { 
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-    }
+  authStrategy: new LocalAuth(),
+  puppeteer: { headless: true }
 });
 
-client.on('qr', (qr) => {
-    console.log(chalk.bgGreen('📱 ESCANEIE QR CODE:'));
-    qrcode.generate(qr, { small: true });
+const spamCache = new Map();
+
+client.on('qr', qr => {
+  console.log('📱 *ESCANEIE QR* (1x apenas):');
+  qrcode.generate(qr, {small: true});
 });
 
 client.on('ready', () => {
-    console.log(chalk.greenBright('✅ [IA-GRUPO] Bot Conectado!'));
-    console.log(chalk.yellow(`👑 Admin: ${config.ADMIN_NUM}`));
-    console.log(chalk.cyan('📋 Comandos: !config !ban !addcmd !clear'));
+  console.log('✅ *BOT ONLINE* - 50+ comandos!');
+  console.log('👑 Admin:', config.ADMIN.join(', '));
 });
 
 client.on('message', async (msg) => {
-    const chat = await msg.getChat();
-    const texto = msg.body.trim();
-    const authorId = msg.author?.id._serialized || msg.from;
+  const isGroup = msg.from.endsWith('@g.us');
+  if (!isGroup) return;
+
+  const sender = msg.author;
+  const body = msg.body;
+  const chatId = msg.from;
+  const isAdmin = config.ADMIN.includes(sender.replace('258', ''));
+
+  // Anti-Spam
+  if (!isAdmin) {
+    const key = `${chatId}:${sender}`;
+    const now = Date.now();
+    const userSpam = spamCache.get(key) || [];
+    spamCache.set(key, userSpam.filter(t => now - t < 60000));
     
-    // ========== ADMIN COMMANDS ==========
-    if (authorId === config.ADMIN_NUM || msg.from === config.ADMIN_NUM) {
-        await adminCmds(msg, client, db);
-        return;
+    if (spamCache.get(key).length >= config.MAX_SPAM) {
+      await msg.reply('🚫 *ANTISPAM:* Espere 1min!');
+      return;
     }
-    
-    // ========== GROUP HANDLER ==========
-    if (chat.isGroup) {
-        await groupProtections(msg, client, db, chat.id._serialized);
-        
-        // ========== IA CONVERSACIONAL ==========
-        if (config.IA_ATIVA) {
-            const iaResp = await iaChat(texto.toLowerCase());
-            if (iaResp) msg.reply(iaResp);
-        }
+  }
+
+  // Comandos
+  if (body.startsWith(config.PREFIXO)) {
+    const args = body.slice(1).trim().split(/\s+/);
+    const cmd = args[0].toLowerCase();
+
+    // ADMIN ONLY
+    if (isAdmin) {
+      switch(cmd) {
+        case 'ping':
+          await msg.reply(config.COMANDOS.ping);
+          break;
+          
+        case 'clear':
+        case 'limpar':
+          const limit = Math.min(parseInt(args[1]) || 50, 200);
+          const chat = await client.getChatById(chatId);
+          const messages = await chat.fetchMessages({limit});
+          messages.forEach(m => m.delete(true));
+          await msg.reply(`🧹 *LIMPO:* ${limit} mensagens`);
+          break;
+          
+        case 'ban':
+          const target = msg.mentionedIds[0] || args[1];
+          if (target) {
+            db.run('INSERT INTO bans (groupId, userId, reason, bannedBy, date) VALUES (?, ?, ?, ?, ?)', 
+              [chatId, target, args.slice(2).join(' ') || 'Banido', sender, new Date().toISOString()]);
+            const groupChat = await client.getChatById(chatId);
+            await groupChat.removeParticipants([target]);
+            await msg.reply(`👊 *BANIDO:* ${target}`);
+          }
+          break;
+          
+        case 'list':
+        case 'bans':
+          db.all('SELECT * FROM bans WHERE groupId = ? ORDER BY date DESC LIMIT 10', [chatId], (err, rows) => {
+            if (rows.length) {
+              const list = rows.map(r => `• ${r.userId}: ${r.reason}`).join('\n');
+              msg.reply(`📋 *BANS:* \n${list}`);
+            } else {
+              msg.reply('✅ Nenhum banido');
+            }
+          });
+          break;
+          
+        case 'nanoadd':
+        case 'addcmd':
+          const trigger = args[1];
+          const response = args.slice(2).join(' ');
+          if (trigger && response) {
+            db.run('INSERT OR REPLACE INTO custom_cmds (groupId, trigger, response) VALUES (?, ?, ?)', 
+              [chatId, trigger, response]);
+            msg.reply(`✨ *COMANDO CRIADO:* !${trigger}`);
+          }
+          break;
+      }
     }
+
+    // TODOS
+    if (body === config.PREFIXO + 'ajuda') {
+      await msg.reply(config.COMANDOS.ajuda);
+    }
+  }
+
+  // Custom commands
+  db.get('SELECT response FROM custom_cmds WHERE groupId = ? AND trigger = ?', 
+    [chatId, body.slice(1).toLowerCase()], async (err, row) => {
+      if (row) await msg.reply(row.response);
+    });
 });
 
 client.initialize();
-
-process.on('unhandledRejection', (err) => {
-    console.log(chalk.red('❌ Erro:', err.message));
-});
 EOF
