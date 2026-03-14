@@ -1,16 +1,15 @@
-cat > package.json << 'EOF'
 {
-  "name": "whatsapp-grupos-ia-bot",
-  "version": "2.0.0",
+  "name": "Meu Bot Genreciador-bot-moz",
+  "version": "1.0.0",
+  "description": "Bot simples de WhatsApp sem API key",
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js"
   },
+  "author": "Lorena",
+  "license": "MIT",
   "dependencies": {
-    "whatsapp-web.js": "^1.23.0",
-    "qrcode-terminal": "^0.12.0",
-    "sqlite3": "^5.1.6",
-    "express": "^4.18.2"
+    "whatsapp-web.js": "^1.25.0",
+    "qrcode-terminal": "^0.12.0"
   }
 }
-EOF
